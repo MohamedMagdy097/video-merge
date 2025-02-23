@@ -30,6 +30,7 @@ async def download_video(url: str, session: aiohttp.ClientSession) -> Path:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
                 content = await response.read()
                 tmp_file.write(content)
+                print(url, tmp_file.name)
                 return Path(tmp_file.name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Download error: {str(e)}")
@@ -42,9 +43,14 @@ async def merge_videos(request: VideoRequest):
     
     try:
         async with aiohttp.ClientSession() as session:
-            # Download all videos concurrently
-            download_tasks = [download_video(url, session) for url in request.urls]
-            video_files = await asyncio.gather(*download_tasks)
+            # Create tasks with their indices to maintain order
+            download_tasks = [(i, download_video(url, session)) for i, url in enumerate(request.urls)]
+            
+            # Gather all downloads concurrently
+            results = await asyncio.gather(*(task for _, task in download_tasks))
+            
+            # Create video_files list in the same order as request.urls
+            video_files = results
             temp_files.extend(video_files)
 
             # Create input list for FFmpeg
