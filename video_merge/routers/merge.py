@@ -19,8 +19,7 @@ def healthcheck():
 
 
 class VideoRequest(BaseModel):
-    url1: str
-    url2: str
+    urls: list[str]
 
 async def download_video(url: str, session: aiohttp.ClientSession) -> Path:
     try:
@@ -43,15 +42,14 @@ async def merge_videos(request: VideoRequest):
     
     try:
         async with aiohttp.ClientSession() as session:
-            # Download both videos
-            file1 = await download_video(request.url1, session)
-            file2 = await download_video(request.url2, session)
-            temp_files = [file1, file2]
-
+            # Download all videos concurrently
+            download_tasks = [download_video(url, session) for url in request.urls]
+            video_files = await asyncio.gather(*download_tasks)
+            temp_files.extend(video_files)
 
             # Create input list for FFmpeg
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as list_file:
-                list_content = f"file '{file1}'\nfile '{file2}'\n"
+                list_content = "\n".join(f"file '{file}'" for file in video_files)
                 list_file.write(list_content)
                 list_path = Path(list_file.name)
                 temp_files.append(list_path)
@@ -91,9 +89,10 @@ async def merge_videos(request: VideoRequest):
 
             # Print all paths
             print("\nTemporary files created:")
-            print(f"Video 1: {file1}")
-            print(f"Video 2: {file2}")
+            for i, file in enumerate(video_files, 1):
+                print(f"Video {i}: {file}")
             print(f"Merged video: {merged_path}\n")
+
             supabase.storage.from_('vids').upload(str(merged_path), open(merged_path, 'rb'))
             # get public url from supabase
             public_url = supabase.storage.from_('vids').get_public_url(str(merged_path))
@@ -134,8 +133,8 @@ async def process_videos(request: VideoRequest):
     try:
         async with aiohttp.ClientSession() as session:
             # Download both videos concurrently
-            file1 = await download_video(request.url1, session)
-            file2 = await download_video(request.url2, session)
+            file1 = await download_video(request.urls[0], session)
+            file2 = await download_video(request.urls[1], session)
             
             temp_files = [file1, file2]
             
