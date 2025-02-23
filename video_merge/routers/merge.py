@@ -95,11 +95,15 @@ async def merge_videos(request: VideoRequest):
             print(f"Video 2: {file2}")
             print(f"Merged video: {merged_path}\n")
             supabase.storage.from_('vids').upload(str(merged_path), open(merged_path, 'rb'))
+            # get public url from supabase
+            public_url = supabase.storage.from_('vids').get_public_url(str(merged_path))
+            print(public_url)
 
             return {
                 "message": "Videos merged successfully",
                 "merged_path": str(merged_path),
-                "temp_files": [str(f) for f in temp_files]
+                "temp_files": [str(f) for f in temp_files],
+                "public_url": public_url
             }
     except Exception as e:
                 print(f"Error: {str(e)}")
